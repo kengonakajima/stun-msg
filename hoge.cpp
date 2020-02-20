@@ -106,6 +106,60 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,"invalid stun message\n");
         return 1;
     }
+
+    switch(stun_msg_type(msg_hdr)) {
+    case STUN_BINDING_RESPONSE:
+        fprintf(stderr,"binding response\n");
+        dumpbin(buf,r);
+        break;
+    case STUN_BINDING_ERROR_RESPONSE:
+        fprintf(stderr,"binding error response\n");
+        dumpbin(buf,r);
+        return 1;
+        break;
+    default:
+        fprintf(stderr,"stun msg type not handled\n");
+        return 1;
+        break;
+    }
+
+    while((attr_hdr=stun_msg_next_attr(msg_hdr,attr_hdr))!=NULL) {
+        switch(stun_attr_type(attr_hdr)) {
+        case STUN_ATTR_MAPPED_ADDRESS:
+            {
+                struct sockaddr sa;
+                stun_attr_sockaddr_read((stun_attr_sockaddr*)attr_hdr,&sa);
+                struct sockaddr_in *sap=(struct sockaddr_in*)&sa;
+                fprintf(stderr,"mapped addr: %s:%d\n", inet_ntoa(sap->sin_addr), ntohs(sap->sin_port));
+            }
+            break;
+        case STUN_ATTR_RESPONSE_ORIGIN:
+            {
+                struct sockaddr sa;
+                stun_attr_sockaddr_read((stun_attr_sockaddr*)attr_hdr,&sa);
+                struct sockaddr_in *sap=(struct sockaddr_in*)&sa;
+                fprintf(stderr,"response origin: %s:%d\n", inet_ntoa(sap->sin_addr), ntohs(sap->sin_port));
+            }
+            break;
+        case STUN_ATTR_OTHER_ADDRESS:
+            {
+                struct sockaddr sa;
+                stun_attr_sockaddr_read((stun_attr_sockaddr*)attr_hdr,&sa);
+                struct sockaddr_in *sap=(struct sockaddr_in*)&sa;
+                fprintf(stderr,"other addr: %s:%d\n", inet_ntoa(sap->sin_addr), ntohs(sap->sin_port));
+            }
+            break;
+        case STUN_ATTR_XOR_MAPPED_ADDRESS:
+            {
+                struct sockaddr sa;
+                int r=stun_attr_xor_sockaddr_read((stun_attr_xor_sockaddr *)attr_hdr, msg_hdr, &sa);
+                struct sockaddr_in *sap=(struct sockaddr_in*)&sa;
+                fprintf(stderr,"xor mapped addr: %s:%d\n", inet_ntoa(sap->sin_addr), ntohs(sap->sin_port));
+            }
+            break;
+        }
+    }
+    
     
     close(s);
     return 0;
