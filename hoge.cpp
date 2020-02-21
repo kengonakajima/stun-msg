@@ -33,6 +33,7 @@ typedef enum {
     PUNCH_STATE_INIT = 0,
     PUNCH_STATE_STUN_STARTED = 1,
     PUNCH_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE = 2,
+    PUNCH_STATE_STUN_FINISHED = 3,
 } punch_state_type;
 
 typedef struct _punch_ctx {
@@ -40,6 +41,8 @@ typedef struct _punch_ctx {
     punch_state_type state;
     struct sockaddr_in stunprimsa;
     struct sockaddr_in stunaltsa;
+    struct sockaddr_in mapped_first_sa;
+    struct sockaddr_in mapped_second_sa;    
 } punch_ctx;
 int punch_init(punch_ctx *ctx) {
     ctx->fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -140,6 +143,11 @@ void punch_update(punch_ctx *ctx) {
                 stun_attr_sockaddr_read((stun_attr_sockaddr*)attr_hdr,&sa);
                 struct sockaddr_in *sap=(struct sockaddr_in*)&sa;
                 fprintf(stderr,"mapped addr: %s:%d\n", inet_ntoa(sap->sin_addr), ntohs(sap->sin_port));
+                if(ctx->state==PUNCH_STATE_STUN_STARTED) {
+                    memcpy(&ctx->mapped_first_sa,sap,sizeof(*sap));                    
+                } else {
+                    memcpy(&ctx->mapped_second_sa,sap,sizeof(*sap));                                        
+                }
             }
             break;
         case STUN_ATTR_RESPONSE_ORIGIN:
@@ -156,6 +164,7 @@ void punch_update(punch_ctx *ctx) {
                 stun_attr_sockaddr_read((stun_attr_sockaddr*)attr_hdr,&sa);
                 struct sockaddr_in *sap=(struct sockaddr_in*)&sa;
                 fprintf(stderr,"other addr: %s:%d\n", inet_ntoa(sap->sin_addr), ntohs(sap->sin_port));
+                memcpy(&ctx->stunaltsa,sap,sizeof(*sap));
             }
             break;
         case STUN_ATTR_XOR_MAPPED_ADDRESS:
@@ -172,8 +181,12 @@ void punch_update(punch_ctx *ctx) {
     if(ctx->state==PUNCH_STATE_STUN_STARTED) {
         fprintf(stderr,"received first stun binding response\n");
         ctx->state = PUNCH_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE;
+        fprintf(stderr,"sending second bindreq to %s:%d\n", inet_ntoa(ctx->stunaltsa.sin_addr), ntohs(ctx->stunaltsa.sin_port));
+        send_binding_req_to(ctx->fd,&ctx->stunaltsa);
+    } else if(ctx->state==PUNCH_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE) {
+        fprintf(stderr,"received second stun binding response from alterpeer\n");
+        ctx->state=PUNCH_STATE_STUN_FINISHED;
     }
-    
 }
 
 int main(int argc, char* argv[]) {
