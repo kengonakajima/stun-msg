@@ -39,6 +39,7 @@ typedef struct _punch_ctx {
     int fd; 
     punch_state_type state;
     struct sockaddr_in stunprimsa;
+    struct sockaddr_in stunaltsa;
 } punch_ctx;
 int punch_init(punch_ctx *ctx) {
     ctx->fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -67,6 +68,19 @@ int punch_init(punch_ctx *ctx) {
     memset((char *) &ctx->stunprimsa, 0, sizeof(ctx->stunprimsa));
     return 0;
 }
+int send_binding_req_to(int fd, struct sockaddr_in *tosa) {
+    size_t buf_len=200;
+    char buf[buf_len];
+    const uint8_t tsx_id[12]={0x01,0x02,0x03,0x04, 0x05,0x06,0x07,0x08, 0x09,0x0a,0x0b,0x0c };//TODO: impl
+    stun_msg_hdr *msg_hdr = (stun_msg_hdr*)buf;
+    stun_msg_hdr_init(msg_hdr, STUN_BINDING_REQUEST, tsx_id);
+    stun_attr_uint32_add(msg_hdr,STUN_ATTR_CHANGE_REQUEST,0x00000000);
+    int l = stun_msg_len(msg_hdr);
+    fprintf(stderr, "punch_start_stun: msghdrlen:%d\n",l);        
+    // 最初のメッセージをstunサーバに送る
+    int r=sendto(fd, buf, l, 0, (struct sockaddr*)(tosa), sizeof(*tosa));
+    return r;
+}
 int punch_start_stun(punch_ctx *ctx, const char *sv,uint16_t port) {
     ctx->stunprimsa.sin_family = AF_INET;
     int r=inet_aton(sv, &ctx->stunprimsa.sin_addr);
@@ -77,23 +91,11 @@ int punch_start_stun(punch_ctx *ctx, const char *sv,uint16_t port) {
     ctx->stunprimsa.sin_port = htons(port);
     ctx->state = PUNCH_STATE_STUN_STARTED;
 
-    // send the first req
-    size_t buf_len=200;
-    char buf[buf_len];
-    const uint8_t tsx_id[12]={0x01,0x02,0x03,0x04, 0x05,0x06,0x07,0x08, 0x09,0x0a,0x0b,0x0c };
-    stun_msg_hdr *msg_hdr = (stun_msg_hdr*)buf;
-    stun_msg_hdr_init(msg_hdr, STUN_BINDING_REQUEST, tsx_id);
-    stun_attr_uint32_add(msg_hdr,STUN_ATTR_CHANGE_REQUEST,0x00000000);
-    int l = stun_msg_len(msg_hdr);
-    fprintf(stderr, "punch_start_stun: msghdrlen:%d\n",l);        
-    // 最初のメッセージをstunサーバに送る
-    r=sendto(ctx->fd, buf, l, 0, (struct sockaddr*)(&ctx->stunprimsa), sizeof(ctx->stunprimsa));
-    if(r<0) {
-        fprintf(stderr,"punch_start_stun: sendto error: %s\n",strerror(errno));
-        return 1;
-    }
-    return 0;
+    r=send_binding_req_to(ctx->fd,&ctx->stunprimsa);
+    if(r<0) fprintf(stderr,"send_binding_req_to error\n");
+    return r;
 }
+
 void punch_update(punch_ctx *ctx) {
     struct sockaddr_in sa;
     socklen_t slen=sizeof(sa);
