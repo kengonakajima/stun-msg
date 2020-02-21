@@ -39,6 +39,7 @@ typedef enum {
 typedef struct _punch_ctx {
     int fd; 
     punch_state_type state;
+    struct sockaddr_in localsa;
     struct sockaddr_in stunprimsa;
     struct sockaddr_in stunaltsa;
     struct sockaddr_in mapped_first_sa;
@@ -49,9 +50,9 @@ int punch_init(punch_ctx *ctx) {
     if(ctx->fd<0) return -1;
 
     if(set_socket_nonblock(ctx->fd)<0) {
-        fprintf(stderr,"set_socket_nonblock failed\n");
         close(ctx->fd);
-        return -1;
+        fprintf(stderr,"set_socket_nonblock failed\n");
+        return -2;
     }
 
     struct sockaddr_in origsi;
@@ -63,12 +64,21 @@ int punch_init(punch_ctx *ctx) {
     
     r=bind(ctx->fd,(struct sockaddr*)&origsi,sizeof(origsi));
     if(r<0) {
-        close(ctx->fd);
-        fprintf(stderr,"bind error: %s\n",strerror(errno));
-        return -1;
+        close(ctx->fd);        
+        fprintf(stderr,"bind failed:%s\n",strerror(errno));        
+        return -3;
     }
     ctx->state = PUNCH_STATE_INIT;
     memset((char *) &ctx->stunprimsa, 0, sizeof(ctx->stunprimsa));
+
+    socklen_t sl=sizeof(ctx->localsa);
+    r=getsockname(ctx->fd,(struct sockaddr*)&ctx->localsa,&sl);
+    if(r<0) {
+        close(ctx->fd);                
+        fprintf(stderr,"getsockname failed:%s\n",strerror(errno));
+        return -4;
+    }
+    fprintf(stderr,"local bind addr: %s:%d\n", inet_ntoa(ctx->localsa.sin_addr), ntohs(ctx->localsa.sin_port));        
     return 0;
 }
 int send_binding_req_to(int fd, struct sockaddr_in *tosa) {
@@ -184,8 +194,11 @@ void punch_update(punch_ctx *ctx) {
         fprintf(stderr,"sending second bindreq to %s:%d\n", inet_ntoa(ctx->stunaltsa.sin_addr), ntohs(ctx->stunaltsa.sin_port));
         send_binding_req_to(ctx->fd,&ctx->stunaltsa);
     } else if(ctx->state==PUNCH_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE) {
-        fprintf(stderr,"received second stun binding response from alterpeer\n");
+        fprintf(stderr,"received second stun binding response from alterpeer, stun finished!\n");
         ctx->state=PUNCH_STATE_STUN_FINISHED;
+
+        // print result of stun basic behaviour test
+
     }
 }
 
