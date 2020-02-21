@@ -1,3 +1,4 @@
+// punch cl
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -214,8 +215,11 @@ int main(int argc, char* argv[]) {
         usleep(10*1000);
         punch_update(&ctx);
     }
+    return 0;
+}
 
-
+#if 0
+{
     struct sockaddr_in origsi;
     memset((char *) &origsi, 0, sizeof(origsi));
     origsi.sin_family = AF_INET;
@@ -355,3 +359,4 @@ int main(int argc, char* argv[]) {
 
 
 
+#endif
