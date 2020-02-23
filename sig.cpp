@@ -13,6 +13,7 @@
 #endif
 
 inline uint32_t get_u32(const char *buf){ return *((uint32_t*)(buf)); }
+inline void set_u32(char *buf, uint32_t v){ (*((uint32_t*)(buf))) = (uint32_t)(v) ; }
 
 void dumpbin(const char*s, size_t l) {
     for(size_t i=0;i<l;i++){
@@ -52,19 +53,21 @@ public:
         fprintf(stderr, "ensureClientAddr: added %s:%d in room %d\n", inet_ntoa(a->sin_addr), ntohs(a->sin_port),id);
         return 1;
     }
-    void broadcastAddresses(int fd) {
-        char buf[1+sizeof(struct sockaddr_in)*MEMBER_MAX]; // cl_num(1byte) + array of sockaddr_in
-        memset(buf,0,sizeof(buf));
-
+    void broadcastAddresses(int fd, int room_id) {
+        const int bufsz=1+4+sizeof(struct sockaddr_in)*MEMBER_MAX; // cl_num(1byte) + room_id(4byte) + array of sockaddr_in
+        char buf[bufsz];
+        memset(buf,0,bufsz);
         buf[0]=cl_num;
+        set_u32(buf+1,room_id);
+        
         for(int i=0;i<cl_num;i++){
-            memcpy(buf+1+i*sizeof(struct sockaddr_in), &clsa[i], sizeof(struct sockaddr_in));
+            memcpy(buf+1+4+i*sizeof(struct sockaddr_in), &clsa[i], sizeof(struct sockaddr_in));
         }
-        dumpbin(buf,sizeof(buf));
+        int sendlen = 1+4+sizeof(struct sockaddr_in)*cl_num;        
+        dumpbin(buf,sendlen);
         for(int i=0;i<cl_num;i++) {
             printf("broadcastAddresses: Sending addrs to %s:%d\n",
                    inet_ntoa(clsa[i].sin_addr), ntohs(clsa[i].sin_port));
-            int sendlen = 1+sizeof(struct sockaddr_in)*cl_num;
             socklen_t slen = sizeof(struct sockaddr_in);
             int r=sendto(fd, buf,sendlen, 0, (struct sockaddr*)(&clsa[i]), slen);
             assert(r>=0);
@@ -97,6 +100,7 @@ Room *createRoom(int id, struct sockaddr_in *sa) {
 int main(int argc, char **argv) {
     if(argc!=2) {
         fprintf(stderr,"need port\n");
+        return 1;
     }
     int port=atoi(argv[1]);
     
@@ -130,7 +134,7 @@ int main(int argc, char **argv) {
             } else {
                 room = createRoom(room_id,&remotesa);
             }
-            room->broadcastAddresses(s);
+            room->broadcastAddresses(s,room_id);
         }
     }
     close(s);
