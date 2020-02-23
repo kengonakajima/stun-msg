@@ -10,8 +10,15 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/time.h>
 
 #include "include/stun/msg.h"
+
+double now() {
+    struct timeval tmv;
+    gettimeofday( &tmv, NULL );
+    return tmv.tv_sec  + (double)(tmv.tv_usec) / 1000000.0f;
+}
 
 void dumpbin(const char*s, size_t l) {
     for(size_t i=0;i<l;i++){
@@ -31,22 +38,23 @@ int32_t set_socket_nonblock(int fd) {
 /////////
 
 typedef enum {
-    PUNCH_STATE_INIT = 0,
-    PUNCH_STATE_STUN_STARTED = 1,
-    PUNCH_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE = 2,
-    PUNCH_STATE_STUN_FINISHED = 3,
-} punch_state_type;
+    STUN_STATE_INIT = 0,
+    STUN_STATE_STUN_STARTED = 1,
+    STUN_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE = 2,
+    STUN_STATE_STUN_FINISHED = 3,
+} stun_state_type;
 
-typedef struct _punch_ctx {
+typedef struct _stun_ctx {
     int fd; 
-    punch_state_type state;
+    stun_state_type state;
     struct sockaddr_in localsa;
     struct sockaddr_in stunprimsa;
     struct sockaddr_in stunaltsa;
     struct sockaddr_in mapped_first_sa;
-    struct sockaddr_in mapped_second_sa;    
-} punch_ctx;
-int punch_init(punch_ctx *ctx) {
+    struct sockaddr_in mapped_second_sa;
+} stun_ctx;
+int stun_init(stun_ctx *ctx) {
+    memset(ctx,0,sizeof(*ctx));
     ctx->fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if(ctx->fd<0) return -1;
 
@@ -69,7 +77,7 @@ int punch_init(punch_ctx *ctx) {
         fprintf(stderr,"bind failed:%s\n",strerror(errno));        
         return -3;
     }
-    ctx->state = PUNCH_STATE_INIT;
+    ctx->state = STUN_STATE_INIT;
     memset((char *) &ctx->stunprimsa, 0, sizeof(ctx->stunprimsa));
 
     socklen_t sl=sizeof(ctx->localsa);
@@ -90,12 +98,12 @@ int send_binding_req_to(int fd, struct sockaddr_in *tosa) {
     stun_msg_hdr_init(msg_hdr, STUN_BINDING_REQUEST, tsx_id);
     stun_attr_uint32_add(msg_hdr,STUN_ATTR_CHANGE_REQUEST,0x00000000);
     int l = stun_msg_len(msg_hdr);
-    fprintf(stderr, "punch_start_stun: msghdrlen:%d\n",l);        
+    fprintf(stderr, "stun_start_stun: msghdrlen:%d\n",l);        
     // 最初のメッセージをstunサーバに送る
     int r=sendto(fd, buf, l, 0, (struct sockaddr*)(tosa), sizeof(*tosa));
     return r;
 }
-int punch_start_stun(punch_ctx *ctx, const char *sv,uint16_t port) {
+int stun_start_stun(stun_ctx *ctx, const char *sv,uint16_t port) {
     ctx->stunprimsa.sin_family = AF_INET;
     int r=inet_aton(sv, &ctx->stunprimsa.sin_addr);
     if(r<0) {
@@ -103,14 +111,14 @@ int punch_start_stun(punch_ctx *ctx, const char *sv,uint16_t port) {
         return -1;
     }
     ctx->stunprimsa.sin_port = htons(port);
-    ctx->state = PUNCH_STATE_STUN_STARTED;
+    ctx->state = STUN_STATE_STUN_STARTED;
 
     r=send_binding_req_to(ctx->fd,&ctx->stunprimsa);
     if(r<0) fprintf(stderr,"send_binding_req_to error\n");
     return r;
 }
 
-void punch_update(punch_ctx *ctx) {
+void stun_update(stun_ctx *ctx) {
     struct sockaddr_in sa;
     socklen_t slen=sizeof(sa);
     char buf[200];
@@ -123,6 +131,7 @@ void punch_update(punch_ctx *ctx) {
         }
         return;
     }
+    
     stun_msg_hdr *msg_hdr=(stun_msg_hdr*)buf;
     const stun_attr_hdr *attr_hdr=NULL;
 
@@ -154,7 +163,7 @@ void punch_update(punch_ctx *ctx) {
                 stun_attr_sockaddr_read((stun_attr_sockaddr*)attr_hdr,&sa);
                 struct sockaddr_in *sap=(struct sockaddr_in*)&sa;
                 fprintf(stderr,"mapped addr: %s:%d\n", inet_ntoa(sap->sin_addr), ntohs(sap->sin_port));
-                if(ctx->state==PUNCH_STATE_STUN_STARTED) {
+                if(ctx->state==STUN_STATE_STUN_STARTED) {
                     memcpy(&ctx->mapped_first_sa,sap,sizeof(*sap));                    
                 } else {
                     memcpy(&ctx->mapped_second_sa,sap,sizeof(*sap));                                        
@@ -189,14 +198,14 @@ void punch_update(punch_ctx *ctx) {
         }
     }
 
-    if(ctx->state==PUNCH_STATE_STUN_STARTED) {
+    if(ctx->state==STUN_STATE_STUN_STARTED) {
         fprintf(stderr,"received first stun binding response\n");
-        ctx->state = PUNCH_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE;
+        ctx->state = STUN_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE;
         fprintf(stderr,"sending second bindreq to %s:%d\n", inet_ntoa(ctx->stunaltsa.sin_addr), ntohs(ctx->stunaltsa.sin_port));
         send_binding_req_to(ctx->fd,&ctx->stunaltsa);
-    } else if(ctx->state==PUNCH_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE) {
+    } else if(ctx->state==STUN_STATE_STUN_RECEIVED_FIRST_BINDING_RESPONSE) {
         fprintf(stderr,"received second stun binding response from alterpeer, stun finished!\n");
-        ctx->state=PUNCH_STATE_STUN_FINISHED;
+        ctx->state=STUN_STATE_STUN_FINISHED;
 
         // print result of stun basic behaviour test
 
@@ -208,13 +217,17 @@ int main(int argc, char* argv[]) {
         printf("arg: server_ip\n");
         return 1;
     }
-    punch_ctx ctx;
-    punch_init(&ctx);
-    punch_start_stun(&ctx,argv[1],3478);
+    stun_ctx ctx;
+    stun_init(&ctx);
+    stun_start_stun(&ctx,argv[1],3478);
     while(1) {
         usleep(10*1000);
-        punch_update(&ctx);
+        stun_update(&ctx);
+        if(ctx.state==STUN_STATE_STUN_FINISHED) {
+            break;
+        }
     }
+    fprintf(stderr,"stun finished\n");
     return 0;
 }
 
