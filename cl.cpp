@@ -14,6 +14,12 @@
 
 #include "include/stun/msg.h"
 
+inline uint32_t get_u32(const char *buf){ return *((uint32_t*)(buf)); }
+inline void set_u32(char *buf, uint32_t v){ (*((uint32_t*)(buf))) = (uint32_t)(v) ; }
+inline uint16_t get_u16(const char *buf){ return *((uint16_t*)(buf)); }
+inline void set_u16(char *buf, uint16_t v){ (*((uint16_t*)(buf))) = (uint16_t)(v); }
+
+
 double now() {
     struct timeval tmv;
     gettimeofday( &tmv, NULL );
@@ -214,9 +220,26 @@ public:
 
 ///////////////
 
+class PunchTarget {
+public:
 
+};
     
+int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa0, struct sockaddr_in *sa1, int room_id) {
+    const int bufsz=4+4+(4+2)*2;
+    char buf[bufsz];
+    set_u32(buf,0xffffffff); // magic number
+    set_u32(buf+4,room_id);
+    set_u32(buf+4+4,sa0->sin_addr.s_addr); //LE as is
+    set_u16(buf+4+4+4,sa0->sin_port);
+    set_u32(buf+4+4+4+2,sa1->sin_addr.s_addr); //LE as is
+    set_u16(buf+4+4+4+2+4,sa1->sin_port);
 
+    int r=sendto(fd,buf,bufsz,0,(struct sockaddr*)sigsa,sizeof(*sigsa));
+    fprintf(stderr,"sending sigsv(%s:%d) :%d\n",inet_ntoa(sigsa->sin_addr),sigsa->sin_port,r);
+    return r;
+    
+}
 /////////////
 
 int main(int argc, char* argv[]) {
@@ -243,12 +266,20 @@ int main(int argc, char* argv[]) {
     }
     fprintf(stderr,"stun finished, start punch\n");
     double last_time=now();
+    int room_id=123;
+    struct sockaddr_in sigsa;
+    int r=inet_aton(argv[1],&sigsa.sin_addr);
+    sigsa.sin_port=ntohs(9999);
+    assert(r==1);
     while(1) {
         usleep(10*1000);
         double nt=now();
         if(last_time<nt-0.5){
+            last_time = nt;
             fprintf(stderr,".");
-            
+
+            // to signaling server
+            send_update_to_sig(ctx->fd, &sigsa, &ctx->mapped_first_sa, &ctx->mapped_second_sa, room_id);
                 
         }
     }

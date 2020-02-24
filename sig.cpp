@@ -14,6 +14,8 @@
 
 inline uint32_t get_u32(const char *buf){ return *((uint32_t*)(buf)); }
 inline void set_u32(char *buf, uint32_t v){ (*((uint32_t*)(buf))) = (uint32_t)(v) ; }
+inline uint16_t get_u16(const char *buf){ return *((uint16_t*)(buf)); }
+inline void set_u16(char *buf, uint16_t v){ (*((uint16_t*)(buf))) = (uint16_t)(v); }
 
 void dumpbin(const char*s, size_t l) {
     for(size_t i=0;i<l;i++){
@@ -119,15 +121,27 @@ int main(int argc, char **argv) {
     assert(r==0);
 
     while (1) {
-        char buf[4];
+        char buf[100];
         struct sockaddr_in remotesa;
         socklen_t slen=sizeof(remotesa);
         r=recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr*)(&remotesa), &slen);
         assert(r>=0);
         fprintf(stderr,"Received packet from %s:%d len:%d\n", inet_ntoa(remotesa.sin_addr), ntohs(remotesa.sin_port),r);
-        if(r==4) {
-            int room_id = (int)get_u32(buf);
-            fprintf(stderr, "received room_id:%d\n",room_id);
+        if(r==(4+4+ (4+2)*2)) {
+            uint32_t magic=get_u32(buf);
+            if(magic!=0xffffffff) {
+                fprintf(stderr,"invalid magic:%x\n",magic);
+                continue;
+            }
+            int room_id = (int)get_u32(buf+4);
+
+            struct sockaddr_in sa0,sa1;
+            sa0.sin_addr.s_addr=get_u32(buf+4+4);
+            sa0.sin_port=get_u16(buf+4+4+4);
+            sa1.sin_addr.s_addr=get_u16(buf+4+4+4+2);
+            sa1.sin_port=get_u16(buf+4+4+4+2+4);
+            fprintf(stderr, "received room_id:%d sa0:%s:%d sa1:%s:%d\n",room_id, inet_ntoa(sa0.sin_addr), sa0.sin_port, inet_ntoa(sa1.sin_addr),sa1.sin_port );
+
             Room *room = findRoomById(room_id);
             if(room) {
                 room->ensureClientAddr(&remotesa);
