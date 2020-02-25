@@ -286,46 +286,49 @@ int main(int argc, char* argv[]) {
             // to signaling server
             send_update_to_sig(ctx->fd, &sigsa, &ctx->mapped_first_sa, &ctx->mapped_second_sa, room_id);
 
-            struct sockaddr_in sa;
-            socklen_t slen=sizeof(sa);
-            char buf[200];
-            int r=recvfrom(ctx->fd, buf, sizeof(buf), 0, (struct sockaddr*)(&sa), &slen);
-            if(r<0) {
-                if(errno!=EAGAIN) { 
-                    fprintf(stderr,"recvfrom error: %d,%s\n",errno,strerror(errno));
-                    break;
-                }
+        }
+        struct sockaddr_in sa;
+        socklen_t slen=sizeof(sa);
+        char buf[200];
+        int r=recvfrom(ctx->fd, buf, sizeof(buf), 0, (struct sockaddr*)(&sa), &slen);
+        if(r<=0) {
+            if(errno!=EAGAIN) { 
+                fprintf(stderr,"recvfrom error: %d,%s\n",errno,strerror(errno));
+                break;
             } else {
-                fprintf(stderr,"received %d byte dgram\n",r);
-                if(r<18) {
-                    fprintf(stderr,"dgram too short\n");
-                    continue;
-                }
-                uint32_t magic=get_u32(buf);
-                int32_t room_id=get_u32(buf+4);
-                struct sockaddr_in sendersa;
-                sendersa.sin_addr.s_addr=get_u32(buf+4+4);
-                sendersa.sin_port=get_u16(buf+4+4+4);
-                int32_t cl_num=get_u32(buf+4+4+4+2);
-                fprintf(stderr, "room_id:%d cl_num:%d sender:%s:%d\n",room_id,cl_num, inet_ntoa(sendersa.sin_addr),ntohs(sendersa.sin_port));
-                if(r>=18+(cl_num*6)) {
-                    size_t ofs=4+4+4+2+4;
-                    for(int i=0;i<cl_num;i++) {
-                        struct sockaddr_in sa;
-                        sa.sin_addr.s_addr=get_u32(buf+ofs);
-                        sa.sin_port=get_u16(buf+ofs+4);// receive nwbo
-                        ofs+=6;
-                        fprintf(stderr, "target addr: %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
-                        if( is_same_sa_in(&sa,&ctx->mapped_first_sa)) {
-                            fprintf(stderr, "skipping local addr\n");
-                        } else {
-                            fprintf(stderr, "found target addr\n");
-                        }
+                    
+            }
+        } else {
+            fprintf(stderr,"received %d byte dgram\n",r);
+            if(r<18) {
+                fprintf(stderr,"dgram too short\n");
+                continue;
+            }
+            uint32_t magic=get_u32(buf);
+            int32_t room_id=get_u32(buf+4);
+            struct sockaddr_in sendersa;
+            sendersa.sin_addr.s_addr=get_u32(buf+4+4);
+            sendersa.sin_port=get_u16(buf+4+4+4);
+            int32_t cl_num=get_u32(buf+4+4+4+2);
+            fprintf(stderr, "room_id:%d cl_num:%d sender:%s:%d\n",room_id,cl_num, inet_ntoa(sendersa.sin_addr),ntohs(sendersa.sin_port));
+            if(r>=18+(cl_num*6)) {
+                size_t ofs=4+4+4+2+4;
+                for(int i=0;i<cl_num;i++) {
+                    struct sockaddr_in sa;
+                    sa.sin_addr.s_addr=get_u32(buf+ofs);
+                    sa.sin_port=get_u16(buf+ofs+4);// receive nwbo
+                    ofs+=6;
+                    fprintf(stderr, "room cl addr: %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
+                    if( is_same_sa_in(&sa,&sendersa)) {
+                        fprintf(stderr, "skipping local addr\n");
+                    } else {
+                        fprintf(stderr, "found target addr\n");
                     }
                 }
             }
         }
     }
+
     return 0;
 }
 

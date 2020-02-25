@@ -66,6 +66,7 @@ public:
         set_u32(buf+4+4+4+2,cl_num);
         size_t ofs=4+4+4+4+2+4;
         for(int i=0;i<cl_num;i++){
+            fprintf(stderr, "broadcastAddresses: [%d] %s:%d\n", i, inet_ntoa(clsa[i].sin_addr), ntohs(clsa[i].sin_port));
             set_u32(buf+ofs,clsa[i].sin_addr.s_addr);
             ofs+=4;
             set_u16(buf+ofs,clsa[i].sin_port); // nwbo
