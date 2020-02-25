@@ -259,7 +259,7 @@ void countEcho(struct sockaddr_in *sendersa) {
 }
 bool echoTestDone() {
     for(int i=0;i<g_targets_used;i++) {
-        if(g_targets[i].echo_cnt<10) return false;
+        if(g_targets[i].echo_cnt<5) return false;
     }
     return true;
 }
