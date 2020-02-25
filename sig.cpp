@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
             sa0.sin_port=get_u16(buf+4+4+4);
             sa1.sin_addr.s_addr=get_u16(buf+4+4+4+2);
             sa1.sin_port=get_u16(buf+4+4+4+2+4);
-            fprintf(stderr, "received room_id:%d sa0:%s:%d sa1:%s:%d\n",room_id, inet_ntoa(sa0.sin_addr), sa0.sin_port, inet_ntoa(sa1.sin_addr),sa1.sin_port );
+            fprintf(stderr, "received room_id:%d sa0:%s:%d sa1:%s:%d\n",room_id, inet_ntoa(sa0.sin_addr), ntohs(sa0.sin_port), inet_ntoa(sa1.sin_addr), ntohs(sa1.sin_port ));
 
             Room *room = findRoomById(room_id);
             if(room) {
