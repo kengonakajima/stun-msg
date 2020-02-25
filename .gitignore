@@ -4,3 +4,16 @@ python/build
 *.so
 python/stunmsg/stunmsg_c.py
 python/stunmsg/stunmsg_c_wrap.c
+CMakeCache.txt
+CMakeFiles
+Makefile
+cl
+cmake_install.cmake
+gtest/CMakeFiles/
+gtest/Makefile
+gtest/cmake_install.cmake
+gtest/libgtest.a
+gtest/libgtest_main.a
+libstunmsg.a
+sig
+stunmsg_tests
