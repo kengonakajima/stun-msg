@@ -38,15 +38,12 @@ public:
         fprintf(stderr, "ensureClientAddr: added clid:%d in room %d\n", addrset->id, id);
         return 1;
     }
-    void broadcastAddresses(int fd, int room_id, struct sockaddr_in *sendersa) {
-        const int bufsz=4+4+4+(4+2)+sizeof(struct sockaddr_in)*MEMBER_MAX; // cl_num(1byte) + room_id(4byte) + array of sockaddr_in
-        char buf[bufsz];
+    void broadcastAddresses(int fd) {
+        char buf[1024];
         size_t ofs=0;
-        memset(buf,0,bufsz);
+        memset(buf,0,sizeof(buf));
         set_u32(buf,0xffffffff); ofs+=4;
-        set_u32(buf+ofs,room_id); ofs+=4;
-        set_u32(buf+ofs,sendersa->sin_addr.s_addr); ofs+=4;
-        set_u16(buf+ofs,sendersa->sin_port); ofs+=2; // nwbo
+        set_u32(buf+ofs,id); ofs+=4;
         set_u32(buf+ofs,cl_num); ofs+=4;
         for(int i=0;i<cl_num;i++){
             set_addrset(buf+ofs, &claddrs[i]);
@@ -95,8 +92,8 @@ int main(int argc, char **argv) {
     
     struct sockaddr_in svsa;
 
-    int s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    assert(s>0);
+    int fd=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    assert(fd>0);
 
     memset((char *) &svsa, 0, sizeof(svsa));
     svsa.sin_family = AF_INET;
@@ -104,14 +101,14 @@ int main(int argc, char **argv) {
     svsa.sin_addr.s_addr =INADDR_ANY;
     
     int r;
-    r=bind(s, (struct sockaddr*)(&svsa), sizeof(svsa));
+    r=bind(fd, (struct sockaddr*)(&svsa), sizeof(svsa));
     assert(r==0);
 
     while (1) {
         char buf[200];
         ClientAddressSet addrset;
         socklen_t slen=sizeof(addrset.sendersa);
-        r=recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr*)(&addrset.sendersa), &slen);
+        r=recvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr*)(&addrset.sendersa), &slen);
         assert(r>=0);
         fprintf(stderr,"Received packet from %s:%d len:%d\n", inet_ntoa(addrset.sendersa.sin_addr), ntohs(addrset.sendersa.sin_port),r);
         if(r>0) {
@@ -145,10 +142,10 @@ int main(int argc, char **argv) {
             // サーバー側をできるだけ単純にして、複雑性の解決をできるだけピアに寄せるという設計にするならば、
             // 3つともすべてクライアントの情報として送る必要がある。
             room->ensureClientAddr(&addrset);
-            room->broadcastAddresses(s,room_id,&addrset.sendersa);
+            room->broadcastAddresses(fd);
         }
         usleep(10*1000);
     }
-    close(s);
+    close(fd);
     return 0;
 }
