@@ -14,37 +14,10 @@
 
 #include "include/stun/msg.h"
 
-inline uint32_t get_u32(const char *buf){ return *((uint32_t*)(buf)); }
-inline void set_u32(char *buf, uint32_t v){ (*((uint32_t*)(buf))) = (uint32_t)(v) ; }
-inline uint16_t get_u16(const char *buf){ return *((uint16_t*)(buf)); }
-inline void set_u16(char *buf, uint16_t v){ (*((uint16_t*)(buf))) = (uint16_t)(v); }
+#include "util.h"
 
 
-double now() {
-    struct timeval tmv;
-    gettimeofday( &tmv, NULL );
-    return tmv.tv_sec  + (double)(tmv.tv_usec) / 1000000.0f;
-}
 
-void dumpbin(const char*s, size_t l) {
-    for(size_t i=0;i<l;i++){
-        fprintf(stderr, "%02x ", s[i] & 0xff );
-        if((i%8)==7) fprintf(stderr,"  ");
-        if((i%16)==15) fprintf(stderr,"\n");
-    }
-    fprintf(stderr,"\n");
-}
-
-int32_t set_socket_nonblock(int fd) {                                                                          
-    int flags = fcntl(fd, F_GETFL, 0);                                                                         
-    assert(flags >= 0);                                                                                        
-    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);                                                             
-}
-
-bool is_same_sa_in(struct sockaddr_in *a0, struct sockaddr_in *a1) {
-    fprintf(stderr,"is_same_sa_in: %s:%d <> %s:%d\n", inet_ntoa(a0->sin_addr),ntohs(a0->sin_port), inet_ntoa(a1->sin_addr), ntohs(a1->sin_port));
-    return (a0->sin_addr.s_addr == a1->sin_addr.s_addr && a0->sin_port == a1->sin_port );
-}
 
 ///////////
 
@@ -230,17 +203,18 @@ public:
 
 };
     
-int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa0, struct sockaddr_in *sa1, int room_id) {
-    const int bufsz=4+4+(4+2)*2;
-    char buf[bufsz];
-    set_u32(buf,0xffffffff); // magic number
-    set_u32(buf+4,room_id);
-    set_u32(buf+4+4,sa0->sin_addr.s_addr); //LE as is
-    set_u16(buf+4+4+4,sa0->sin_port);
-    set_u32(buf+4+4+4+2,sa1->sin_addr.s_addr); //LE as is
-    set_u16(buf+4+4+4+2+4,sa1->sin_port);
+int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa0, struct sockaddr_in *sa1, int room_id, int client_id ) {
+    size_t ofs=0;
+    char buf[200];
+    set_u32(buf+ofs,0xffffffff); ofs+=4; // magic number
+    set_u32(buf+ofs,room_id); ofs+=4;
+    set_u32(buf+ofs,client_id); ofs+=4;
+    set_u32(buf+ofs,sa0->sin_addr.s_addr); ofs+=4; 
+    set_u16(buf+ofs,sa0->sin_port); ofs+=2; // nwbo
+    set_u32(buf+ofs,sa1->sin_addr.s_addr); ofs+=4; 
+    set_u16(buf+ofs,sa1->sin_port); ofs+=2;  // nwbo
 
-    int r=sendto(fd,buf,bufsz,0,(struct sockaddr*)sigsa,sizeof(*sigsa));
+    int r=sendto(fd,buf,ofs,0,(struct sockaddr*)sigsa,sizeof(*sigsa));
     fprintf(stderr,"sending sigsv(%s:%d) :%d\n",inet_ntoa(sigsa->sin_addr),ntohs(sigsa->sin_port),r);
     return r;
     
@@ -269,9 +243,10 @@ int main(int argc, char* argv[]) {
             break;
         }
     }
-    fprintf(stderr,"stun finished, start punch\n");
-    double last_time=now();
+    fprintf(stderr,"stun finished, start punch\n==========================\n");
+    double last_time=0;
     int room_id=123;
+    int client_id=3333;
     struct sockaddr_in sigsa;
     int r=inet_aton(argv[1],&sigsa.sin_addr);
     sigsa.sin_port=htons(9999);
@@ -284,7 +259,7 @@ int main(int argc, char* argv[]) {
             fprintf(stderr,".");
 
             // to signaling server
-            send_update_to_sig(ctx->fd, &sigsa, &ctx->mapped_first_sa, &ctx->mapped_second_sa, room_id);
+            send_update_to_sig(ctx->fd, &sigsa, &ctx->mapped_first_sa, &ctx->mapped_second_sa, room_id, client_id);
 
         }
         struct sockaddr_in sa;
@@ -318,7 +293,7 @@ int main(int argc, char* argv[]) {
                     sa.sin_addr.s_addr=get_u32(buf+ofs);
                     sa.sin_port=get_u16(buf+ofs+4);// receive nwbo
                     ofs+=6;
-                    fprintf(stderr, "room cl addr: %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
+                    fprintf(stderr, "room cl addr: %s:%d %d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port), sa.sin_port);
                     if( is_same_sa_in(&sa,&sendersa)) {
                         fprintf(stderr, "skipping local addr\n");
                     } else {

@@ -17,3 +17,4 @@ gtest/libgtest_main.a
 libstunmsg.a
 sig
 stunmsg_tests
+*.o

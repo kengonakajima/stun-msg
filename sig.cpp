@@ -8,41 +8,24 @@
 #include <string.h>
 #include <assert.h>
 
-#ifndef elementof
-#define elementof(x) ( (int)(sizeof(x) / sizeof(x[0])))
-#endif
+#include "util.h"
 
-inline uint32_t get_u32(const char *buf){ return *((uint32_t*)(buf)); }
-inline void set_u32(char *buf, uint32_t v){ (*((uint32_t*)(buf))) = (uint32_t)(v) ; }
-inline uint16_t get_u16(const char *buf){ return *((uint16_t*)(buf)); }
-inline void set_u16(char *buf, uint16_t v){ (*((uint16_t*)(buf))) = (uint16_t)(v); }
 
-void dumpbin(const char*s, size_t l) {
-    for(size_t i=0;i<l;i++){
-        fprintf(stderr, "%02x ", s[i] & 0xff );
-        if((i%8)==7) fprintf(stderr,"  ");
-        if((i%16)==15) fprintf(stderr,"\n");
-    }
-    fprintf(stderr,"\n");
-}
-
-// signaling server
 
 class Room {
 public:
     int id; // -1 not used
     int cl_num;
     static const int MEMBER_MAX=4;
-    struct sockaddr_in clsa[MEMBER_MAX];
+    ClientAddressSet claddrs[MEMBER_MAX];
     Room(int id) :id(id), cl_num(0) {
-        memset(clsa,0,sizeof(clsa));
+        memset(claddrs,0,sizeof(claddrs));
         fprintf(stderr,"Room constructed.id:%d\n",id);
     }
-    int ensureClientAddr(struct sockaddr_in *a) {
+    int ensureClientAddr(ClientAddressSet *addrset) {
         for(int i=0;i<cl_num;i++) {
-            if(clsa[i].sin_addr.s_addr==a->sin_addr.s_addr && clsa[i].sin_port==a->sin_port) {
-                fprintf(stderr,"ensureClientAddr: %s:%d is already added in room %d\n",
-                        inet_ntoa(a->sin_addr), ntohs(a->sin_port), id);
+            if(claddrs[i].id==addrset->id) {
+                fprintf(stderr,"ensureClientAddr: clid %d is already added in room %d\n", addrset->id,id);
                 return 0;
             }
         }
@@ -50,34 +33,32 @@ public:
             fprintf(stderr, "ensureClientAddr too many member in room %d\n",id);
             return -1;
         }
-        memcpy( & clsa[cl_num], a, sizeof(*a));
+        memcpy( & claddrs[cl_num], addrset, sizeof(*addrset));
         cl_num++;
-        fprintf(stderr, "ensureClientAddr: added %s:%d in room %d\n", inet_ntoa(a->sin_addr), ntohs(a->sin_port),id);
+        fprintf(stderr, "ensureClientAddr: added clid:%d in room %d\n", addrset->id, id);
         return 1;
     }
     void broadcastAddresses(int fd, int room_id, struct sockaddr_in *sendersa) {
         const int bufsz=4+4+4+(4+2)+sizeof(struct sockaddr_in)*MEMBER_MAX; // cl_num(1byte) + room_id(4byte) + array of sockaddr_in
         char buf[bufsz];
+        size_t ofs=0;
         memset(buf,0,bufsz);
-        set_u32(buf,0xffffffff);
-        set_u32(buf+4,room_id);
-        set_u32(buf+4+4,sendersa->sin_addr.s_addr);
-        set_u16(buf+4+4+4,sendersa->sin_port); // nwbo
-        set_u32(buf+4+4+4+2,cl_num);
-        size_t ofs=4+4+4+4+2+4;
+        set_u32(buf,0xffffffff); ofs+=4;
+        set_u32(buf+ofs,room_id); ofs+=4;
+        set_u32(buf+ofs,sendersa->sin_addr.s_addr); ofs+=4;
+        set_u16(buf+ofs,sendersa->sin_port); ofs+=2; // nwbo
+        set_u32(buf+ofs,cl_num); ofs+=4;
         for(int i=0;i<cl_num;i++){
-            fprintf(stderr, "broadcastAddresses: [%d] %s:%d\n", i, inet_ntoa(clsa[i].sin_addr), ntohs(clsa[i].sin_port));
-            set_u32(buf+ofs,clsa[i].sin_addr.s_addr);
-            ofs+=4;
-            set_u16(buf+ofs,clsa[i].sin_port); // nwbo
-            ofs+=2;
+            set_addrset(buf+ofs, &claddrs[i]);
+            ofs+= get_addrset_size();
+            fprintf(stderr, "broadcastAddresses: i:%d id:%d sendersa:%s:%d\n", i, claddrs[i].id, inet_ntoa(claddrs[i].sendersa.sin_addr), ntohs(claddrs[i].sendersa.sin_port));
         }
         dumpbin(buf,ofs);
         for(int i=0;i<cl_num;i++) {
             printf("broadcastAddresses: Sending addrs to %s:%d\n",
-                   inet_ntoa(clsa[i].sin_addr), ntohs(clsa[i].sin_port));
+                   inet_ntoa(claddrs[i].sendersa.sin_addr), ntohs(claddrs[i].sendersa.sin_port));
             socklen_t slen = sizeof(struct sockaddr_in);
-            int r=sendto(fd, buf,ofs, 0, (struct sockaddr*)(&clsa[i]), slen);
+            int r=sendto(fd, buf,ofs, 0, (struct sockaddr*)(&claddrs[i].sendersa), slen);
             assert(r>=0);
             
         }
@@ -93,11 +74,11 @@ Room *findRoomById(int id) {
     }
     return NULL;
 }
-Room *createRoom(int id, struct sockaddr_in *sa) {
+Room *createRoom(int id, ClientAddressSet *addrset) {
     for(int i=0;i<elementof(g_rooms);i++) {
         if(g_rooms[i]==NULL) {
             g_rooms[i]=new Room(id);
-            g_rooms[i]->ensureClientAddr(sa);
+            g_rooms[i]->ensureClientAddr(addrset);
             return g_rooms[i];
         }
     }
@@ -127,34 +108,43 @@ int main(int argc, char **argv) {
     assert(r==0);
 
     while (1) {
-        char buf[100];
-        struct sockaddr_in remotesa;
-        socklen_t slen=sizeof(remotesa);
-        r=recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr*)(&remotesa), &slen);
+        char buf[200];
+        ClientAddressSet addrset;
+        socklen_t slen=sizeof(addrset.sendersa);
+        r=recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr*)(&addrset.sendersa), &slen);
         assert(r>=0);
-        fprintf(stderr,"Received packet from %s:%d len:%d\n", inet_ntoa(remotesa.sin_addr), ntohs(remotesa.sin_port),r);
-        if(r==(4+4+ (4+2)*2)) {
+        fprintf(stderr,"Received packet from %s:%d len:%d\n", inet_ntoa(addrset.sendersa.sin_addr), ntohs(addrset.sendersa.sin_port),r);
+        if(r>0) {
+            size_t ofs=0;
             uint32_t magic=get_u32(buf);
+            ofs+=4;
             if(magic!=0xffffffff) {
                 fprintf(stderr,"invalid magic:%x\n",magic);
                 continue;
             }
-            int room_id = (int)get_u32(buf+4);
 
-            struct sockaddr_in sa0,sa1;
-            sa0.sin_addr.s_addr=get_u32(buf+4+4);
-            sa0.sin_port=get_u16(buf+4+4+4);
-            sa1.sin_addr.s_addr=get_u16(buf+4+4+4+2);
-            sa1.sin_port=get_u16(buf+4+4+4+2+4);
-            fprintf(stderr, "received room_id:%d sa0:%s:%d sa1:%s:%d\n",room_id, inet_ntoa(sa0.sin_addr), ntohs(sa0.sin_port), inet_ntoa(sa1.sin_addr), ntohs(sa1.sin_port ));
+            int room_id = (int)get_u32(buf+ofs);
+            ofs+=4;
+            addrset.stun0sa.sin_addr.s_addr=get_u32(buf+ofs); ofs+=4;
+            addrset.stun0sa.sin_port=get_u16(buf+ofs); ofs+=2;
+            addrset.stun1sa.sin_addr.s_addr=get_u16(buf+ofs); ofs+=4;
+            addrset.stun1sa.sin_port=get_u16(buf+ofs); ofs+=2;
+            fprintf(stderr, "received %d bytes, room_id:%d stun0sa:%s:%d stun1sa:%s:%d\n",
+                    (int)ofs, room_id,
+                    inet_ntoa(addrset.stun0sa.sin_addr), ntohs(addrset.stun0sa.sin_port),
+                    inet_ntoa(addrset.stun1sa.sin_addr), ntohs(addrset.stun1sa.sin_port) );
 
             Room *room = findRoomById(room_id);
             if(room) {
-                room->ensureClientAddr(&remotesa);
-            } else {
-                room = createRoom(room_id,&remotesa);
+                room = createRoom(room_id,&addrset);
             }
-            room->broadcastAddresses(s,room_id,&remotesa);
+            // 利用可能なアドレスは、 remotesa(sigに送ってきたアドレス), sa0(STUNのprimary), sa1(STUNのalter)
+            // の3つがある。 sigがSTUNサーバと同じマシンで動いてるが、ポート番号がSTUNとは違うため、
+            // NATの挙動が dest port依存の場合は、3つとも違っている可能性がある。
+            // サーバー側をできるだけ単純にして、複雑性の解決をできるだけピアに寄せるという設計にするならば、
+            // 3つともすべてクライアントの情報として送る必要がある。
+            room->ensureClientAddr(&addrset);
+            room->broadcastAddresses(s,room_id,&addrset.sendersa);
         }
         usleep(10*1000);
     }
