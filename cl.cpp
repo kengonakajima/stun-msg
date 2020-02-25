@@ -319,11 +319,31 @@ int main(int argc, char* argv[]) {
                 } else {
                     fprintf(stderr, "found target addr\n");
                     ensureTarget(&addrset);
-                    if(g_targets_used == (room_member_num-1) ) {
-                        fprintf(stderr, "### Room member targets OK!\n");
-                        break;
-                    }
                 }
+            }
+        }
+        if(g_targets_used == (room_member_num-1) ) {
+            fprintf(stderr, "### Room member targets OK!\n");
+            break;
+        }
+    }
+    
+    fprintf(stderr, "### now we have all members set up! start ping test\n");
+    while(1) {
+        usleep(10*1000);
+        double nt=now();
+        static int trial=0;
+        trial++;
+        if(last_time<nt-0.5){
+            last_time = nt;
+            fprintf(stderr,"### trial:%d\n",trial);
+
+            // to signaling server
+            for(int i=0;i<g_targets_used;i++) {
+                fprintf(stderr, "i:%d id:%d %s:%d %s:%d %s:%d\n", i, g_targets[i].id,
+                        inet_ntoa(g_targets[i].sendersa.sin_addr), ntohs(g_targets[i].sendersa.sin_port),
+                        inet_ntoa(g_targets[i].stun0sa.sin_addr), ntohs(g_targets[i].stun0sa.sin_port),
+                        inet_ntoa(g_targets[i].stun1sa.sin_addr), ntohs(g_targets[i].stun1sa.sin_port) );
             }
         }
     }

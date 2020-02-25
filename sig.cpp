@@ -48,7 +48,12 @@ public:
         for(int i=0;i<cl_num;i++){
             set_addrset(buf+ofs, &claddrs[i]);
             ofs+= get_addrset_size();
-            fprintf(stderr, "broadcastAddresses: i:%d id:%d sendersa:%s:%d\n", i, claddrs[i].id, inet_ntoa(claddrs[i].sendersa.sin_addr), ntohs(claddrs[i].sendersa.sin_port));
+            fprintf(stderr, "broadcastAddresses: i:%d id:%d sendersa:%s:%d stun0sa:%s:%d stun1sa:%s:%d\n",
+                    i, claddrs[i].id,
+                    inet_ntoa(claddrs[i].sendersa.sin_addr), ntohs(claddrs[i].sendersa.sin_port),
+                    inet_ntoa(claddrs[i].stun0sa.sin_addr), ntohs(claddrs[i].stun0sa.sin_port),
+                    inet_ntoa(claddrs[i].stun1sa.sin_addr), ntohs(claddrs[i].stun1sa.sin_port)
+                    );
         }
         dumpbin(buf,ofs);
         for(int i=0;i<cl_num;i++) {
