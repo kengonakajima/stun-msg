@@ -207,12 +207,18 @@ public:
 
 
 ///////////////
+class Target {
+public:
+    ClientAddressSet addrset;
+    int echo_cnt;
+    Target() : echo_cnt(0) {}
+};
 
-ClientAddressSet g_targets[16];
+Target g_targets[16];
 int g_targets_used=0;
 void ensureTarget(ClientAddressSet *addrset) {
     for(int i=0;i<g_targets_used;i++) {
-        if(g_targets[i].id==addrset->id) {
+        if(g_targets[i].addrset.id==addrset->id) {
             return;
         }
     }
@@ -350,7 +356,7 @@ int main(int argc, char* argv[]) {
 
     int nat_ok_count=0;
     for(int i=0;i<g_targets_used;i++) {
-        if(g_targets[i].detectNATType()==NAT_TYPE_IP_PORT_STATIC)nat_ok_count++;
+        if(g_targets[i].addrset.detectNATType()==NAT_TYPE_IP_PORT_STATIC)nat_ok_count++;
     }
     if(nat_ok_count<room_member_num-1) {
         fprintf(stderr, "Need %d target(s), but only %d are in NAT type2..\n", room_member_num-1, nat_ok_count);
@@ -368,15 +374,15 @@ int main(int argc, char* argv[]) {
 
             // to signaling server
             for(int i=0;i<g_targets_used;i++) {
-                fprintf(stderr, "trial:%d i:%d id:%d %s:%d %s:%d %s:%d\n",
-                        trial, i, g_targets[i].id,
-                        inet_ntoa(g_targets[i].sendersa.sin_addr), ntohs(g_targets[i].sendersa.sin_port),
-                        inet_ntoa(g_targets[i].stun0sa.sin_addr), ntohs(g_targets[i].stun0sa.sin_port),
-                        inet_ntoa(g_targets[i].stun1sa.sin_addr), ntohs(g_targets[i].stun1sa.sin_port) );
+                fprintf(stderr, "trial:%d i:%d id:%d echo:%d %s:%d %s:%d %s:%d\n",
+                        trial, i, g_targets[i].addrset.id, g_targets[i].echo_cnt,
+                        inet_ntoa(g_targets[i].addrset.sendersa.sin_addr), ntohs(g_targets[i].addrset.sendersa.sin_port),
+                        inet_ntoa(g_targets[i].addrset.stun0sa.sin_addr), ntohs(g_targets[i].addrset.stun0sa.sin_port),
+                        inet_ntoa(g_targets[i].addrset.stun1sa.sin_addr), ntohs(g_targets[i].addrset.stun1sa.sin_port) );
                 char buf[4] = {'h','o','g','e'};
                 struct sockaddr_in destsa;
-                destsa.sin_addr.s_addr = g_targets[i].stun0sa.sin_addr.s_addr;
-                destsa.sin_port = g_targets[i].stun0sa.sin_port;
+                destsa.sin_addr.s_addr = g_targets[i].addrset.stun0sa.sin_addr.s_addr;
+                destsa.sin_port = g_targets[i].addrset.stun0sa.sin_port;
                 
                 int r=sendto(ctx->fd,buf,4,0,(struct sockaddr*)&destsa,sizeof(destsa));
                 fprintf(stderr,"sendto result:%d to:%s:%d\n",r,inet_ntoa(destsa.sin_addr),ntohs(destsa.sin_port));
@@ -385,17 +391,19 @@ int main(int argc, char* argv[]) {
         }
         struct sockaddr_in sa;
         socklen_t slen=sizeof(sa);
-        char buf[10];
+        char buf[4];
         int r=recvfrom(ctx->fd, buf, sizeof(buf), 0, (struct sockaddr*)(&sa), &slen);
         if(r<=0) {
             if(errno!=EAGAIN) { 
                 fprintf(stderr,"recvfrom error: %d,%s\n",errno,strerror(errno));
                 break;
             } else {
-                fprintf(stderr,".")    ;
             }
         } else {
-            fprintf(stderr,"recvfrom ret:%d addr:%s:%d\n", r, inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
+            if(buf[0]=='h'&&buf[1]=='o'&&buf[2]=='g'&&buf[3]=='e') {
+                
+                fprintf(stderr,"recvfrom ret:%d addr:%s:%d\n", r, inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
+            }
         }
         
         
