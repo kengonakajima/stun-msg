@@ -198,11 +198,22 @@ public:
 
 ///////////////
 
-class PunchTarget {
-public:
-
-};
-    
+ClientAddressSet g_targets[16];
+int g_targets_used=0;
+void ensureTarget(ClientAddressSet *addrset) {
+    for(int i=0;i<g_targets_used;i++) {
+        if(g_targets[i].id==addrset->id) {
+            return;
+        }
+    }
+    if(g_targets_used==elementof(g_targets)) {
+        fprintf(stderr,"### targets full! cant add\n");
+        return;
+    }
+    fprintf(stderr,"### Adding target client_id:%d sender:%s:%d\n", addrset->id, inet_ntoa(addrset->sendersa.sin_addr), ntohs(addrset->sendersa.sin_port));
+    memcpy(&g_targets[g_targets_used],addrset,sizeof(*addrset));
+    g_targets_used++;
+}
 int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa0, struct sockaddr_in *sa1, int room_id, int client_id ) {
     size_t ofs=0;
     char buf[200];
@@ -222,16 +233,21 @@ int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa
 /////////////
 
 int main(int argc, char* argv[]) {
-    if(argc!=2) {
-        printf("arg: server_ip\n");
+    if(argc!=5) {
+        printf("arg: server_ip client_id room_id room_member_num\n");
         return 1;
     }
+    char *svaddr=argv[1];
+    int client_id=atoi(argv[2]);
+    int room_id=atoi(argv[3]);
+    int room_member_num=atoi(argv[4]);
+    
     StunContext *ctx=new StunContext();
     if(ctx->init()<0) {
         fprintf(stderr,"cant init stun\n");
         return 1;
     }
-    if(ctx->start(argv[1],3478)<0) {
+    if(ctx->start(svaddr,3478)<0) {
         fprintf(stderr,"cant start stun\n");
         return 1;
     }
@@ -245,12 +261,11 @@ int main(int argc, char* argv[]) {
     }
     fprintf(stderr,"stun finished, start punch\n==========================\n");
     double last_time=0;
-    int room_id=123;
-    int client_id=3333;
     struct sockaddr_in sigsa;
     int r=inet_aton(argv[1],&sigsa.sin_addr);
     sigsa.sin_port=htons(9999);
     assert(r==1);
+
     while(1) {
         usleep(10*1000);
         double nt=now();
@@ -303,6 +318,11 @@ int main(int argc, char* argv[]) {
                     fprintf(stderr, "skipping myself\n");
                 } else {
                     fprintf(stderr, "found target addr\n");
+                    ensureTarget(&addrset);
+                    if(g_targets_used == (room_member_num-1) ) {
+                        fprintf(stderr, "### Room member targets OK!\n");
+                        break;
+                    }
                 }
             }
         }
