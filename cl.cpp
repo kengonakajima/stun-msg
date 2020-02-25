@@ -333,8 +333,8 @@ int main(int argc, char* argv[]) {
         usleep(10*1000);
         double nt=now();
         static int trial=0;
-        trial++;
         if(last_time<nt-0.5){
+            trial++;
             last_time = nt;
             fprintf(stderr,"### trial:%d\n",trial);
 
