@@ -18,3 +18,4 @@ libstunmsg.a
 sig
 stunmsg_tests
 *.o
+*.dSYM
