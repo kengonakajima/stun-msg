@@ -43,11 +43,6 @@ typedef enum {
     STUN_STATE_STUN_FINISHED = 3,
 } stun_state_type;
 
-typedef enum {
-              NAT_TYPE_IP_PORT_STATIC = 2,  // type 1/2
-              NAT_TYPE_IP_PORT_DYNAMIC = 3, // type 3
-              NAT_TYPE_IP_DIFFER = 4, // IP address differ, hole punch not available!
-} nat_type;
 
 class StunContext {
 public:

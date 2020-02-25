@@ -20,6 +20,13 @@ inline void set_u16(char *buf, uint16_t v){ (*((uint16_t*)(buf))) = (uint16_t)(v
 
 void dumpbin(const char*s, size_t l) ;
 
+typedef enum {
+              NAT_TYPE_IP_PORT_STATIC = 2,  // type 1/2
+              NAT_TYPE_IP_PORT_DYNAMIC = 3, // type 3
+              NAT_TYPE_IP_DIFFER = 4, // IP address differ, hole punch not available!
+} nat_type;
+
+
 // signaling server
 class ClientAddressSet {
 public:
@@ -28,6 +35,15 @@ public:
     struct sockaddr_in stun0sa;
     struct sockaddr_in stun1sa;
     ClientAddressSet() {}
+    nat_type detectNATType() {
+        if(stun0sa.sin_addr.s_addr != stun1sa.sin_addr.s_addr) return NAT_TYPE_IP_DIFFER;
+        if(stun0sa.sin_addr.s_addr == stun1sa.sin_addr.s_addr &&
+           stun0sa.sin_port == stun1sa.sin_port ) {
+            return NAT_TYPE_IP_PORT_STATIC;
+        } else {
+            return NAT_TYPE_IP_PORT_DYNAMIC;
+        }
+    }
 };
 
 void set_addrset(char *buf, ClientAddressSet *addrset);
