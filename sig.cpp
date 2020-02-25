@@ -115,6 +115,7 @@ int main(int argc, char **argv) {
         assert(r>=0);
         fprintf(stderr,"Received packet from %s:%d len:%d\n", inet_ntoa(addrset.sendersa.sin_addr), ntohs(addrset.sendersa.sin_port),r);
         if(r>0) {
+            dumpbin(buf,r);
             size_t ofs=0;
             uint32_t magic=get_u32(buf);
             ofs+=4;
