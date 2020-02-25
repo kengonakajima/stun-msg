@@ -43,6 +43,13 @@ typedef enum {
     STUN_STATE_STUN_FINISHED = 3,
 } stun_state_type;
 
+typedef enum {
+              NAT_TYPE_GLOBAL_IP = 1, // type 1
+              NAT_TYPE_IP_PORT_STATIC = 2,  // type 2
+              NAT_TYPE_IP_PORT_DYNAMIC = 3, // type 3
+              NAT_TYPE_IP_DIFFER = 4, // IP address differ, hole punch not available!
+} nat_type;
+
 class StunContext {
 public:
     int fd;    
@@ -193,6 +200,16 @@ public:
             state=STUN_STATE_STUN_FINISHED;
         }
     }
+    nat_type detectNATType() {
+        if(mapped_first_sa.sin_addr.s_addr != mapped_second_sa.sin_addr.s_addr) return NAT_TYPE_IP_DIFFER;
+        if(localsa.sin_addr.s_addr == mapped_first_sa.sin_addr.s_addr) return NAT_TYPE_GLOBAL_IP;
+        if(mapped_first_sa.sin_addr.s_addr == mapped_second_sa.sin_addr.s_addr &&
+           mapped_first_sa.sin_port == mapped_second_sa.sin_port ) {
+            return NAT_TYPE_IP_PORT_STATIC;
+        } else {
+            return NAT_TYPE_IP_PORT_DYNAMIC;
+        }
+    }
 };
 
 
@@ -259,7 +276,13 @@ int main(int argc, char* argv[]) {
             break;
         }
     }
-    fprintf(stderr,"stun finished, start punch\n==========================\n");
+
+    fprintf(stderr,"stun finished! detecting NAT type:%d\n", ctx->detectNATType());
+    
+    fprintf(stderr,"starting hole punch\n==========================\n");
+
+    /////
+    
     double last_time=0;
     struct sockaddr_in sigsa;
     int r=inet_aton(argv[1],&sigsa.sin_addr);
