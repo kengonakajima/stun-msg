@@ -257,9 +257,10 @@ void countEcho(struct sockaddr_in *sendersa) {
         }
     }
 }
-bool echoTestDone() {
+
+bool echoTestDone(int thres) {
     for(int i=0;i<g_targets_used;i++) {
-        if(g_targets[i].echo_cnt<5) return false;
+        if(g_targets[i].echo_cnt<thres) return false;
     }
     return true;
 }
@@ -385,7 +386,7 @@ int main(int argc, char* argv[]) {
         usleep(10*1000);
         double nt=now();
         static int trial=0;
-        if(last_time<nt-0.5){
+        if(last_time<nt-0.4){
             trial++;
             last_time = nt;
 
@@ -423,8 +424,14 @@ int main(int argc, char* argv[]) {
             }
         }
         
-        if(echoTestDone()) {
-            fprintf(stderr,"echo test done!\n");
+        if(echoTestDone(6)) {
+            fprintf(stderr,"echo test completed(pass 1)!\n");
+            break;
+        } else if(trial>8 && echoTestDone(4)) {
+            fprintf(stderr,"echo test completed(pass 2)!\n");
+            break;
+        } else if(trial>20) {
+            fprintf(stderr,"hole punching failed (trial:%d)\n",trial);
             break;
         }
     }
