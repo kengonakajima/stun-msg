@@ -215,7 +215,7 @@ int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa
     set_u16(buf+ofs,sa1->sin_port); ofs+=2;  // nwbo
 
     int r=sendto(fd,buf,ofs,0,(struct sockaddr*)sigsa,sizeof(*sigsa));
-    fprintf(stderr,"sending sigsv(%s:%d) :%d\n",inet_ntoa(sigsa->sin_addr),ntohs(sigsa->sin_port),r);
+    fprintf(stderr,"sending msg to sigsv(%s:%d) r:%d\n",inet_ntoa(sigsa->sin_addr),ntohs(sigsa->sin_port),r);
     return r;
     
 }

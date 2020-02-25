@@ -124,14 +124,14 @@ int main(int argc, char **argv) {
                 continue;
             }
 
-            int room_id = (int)get_u32(buf+ofs);
-            ofs+=4;
+            int room_id = (int)get_u32(buf+ofs); ofs+=4;
+            int client_id = (int)get_u32(buf+ofs); ofs+=4;
             addrset.stun0sa.sin_addr.s_addr=get_u32(buf+ofs); ofs+=4;
             addrset.stun0sa.sin_port=get_u16(buf+ofs); ofs+=2;
             addrset.stun1sa.sin_addr.s_addr=get_u16(buf+ofs); ofs+=4;
             addrset.stun1sa.sin_port=get_u16(buf+ofs); ofs+=2;
-            fprintf(stderr, "received %d bytes, room_id:%d stun0sa:%s:%d stun1sa:%s:%d\n",
-                    (int)ofs, room_id,
+            fprintf(stderr, "received %d bytes, room_id:%d cl_id:%d stun0sa:%s:%d stun1sa:%s:%d\n",
+                    (int)ofs, room_id, client_id,
                     inet_ntoa(addrset.stun0sa.sin_addr), ntohs(addrset.stun0sa.sin_port),
                     inet_ntoa(addrset.stun1sa.sin_addr), ntohs(addrset.stun1sa.sin_port) );
 
