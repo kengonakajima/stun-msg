@@ -336,14 +336,15 @@ int main(int argc, char* argv[]) {
         if(last_time<nt-0.5){
             trial++;
             last_time = nt;
-            fprintf(stderr,"### trial:%d\n",trial);
 
             // to signaling server
             for(int i=0;i<g_targets_used;i++) {
-                fprintf(stderr, "i:%d id:%d %s:%d %s:%d %s:%d\n", i, g_targets[i].id,
+                fprintf(stderr, "trial:%d i:%d id:%d %s:%d %s:%d %s:%d\n",
+                        trial, i, g_targets[i].id,
                         inet_ntoa(g_targets[i].sendersa.sin_addr), ntohs(g_targets[i].sendersa.sin_port),
                         inet_ntoa(g_targets[i].stun0sa.sin_addr), ntohs(g_targets[i].stun0sa.sin_port),
                         inet_ntoa(g_targets[i].stun1sa.sin_addr), ntohs(g_targets[i].stun1sa.sin_port) );
+
             }
         }
     }
