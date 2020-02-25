@@ -129,7 +129,7 @@ public:
         struct sockaddr_in sa;
         socklen_t slen=sizeof(sa);
         char buf[200];
-        int r=recvfrom(fd, &buf, sizeof(buf), 0, (struct sockaddr*)(&sa), &slen);
+        int r=recvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr*)(&sa), &slen);
         if(r<0) {
             if(errno==EAGAIN) {
                 return;
@@ -280,7 +280,19 @@ int main(int argc, char* argv[]) {
 
             // to signaling server
             send_update_to_sig(ctx->fd, &sigsa, &ctx->mapped_first_sa, &ctx->mapped_second_sa, room_id);
-                
+
+            struct sockaddr_in sa;
+            socklen_t slen=sizeof(sa);
+            char buf[200];
+            int r=recvfrom(ctx->fd, buf, sizeof(buf), 0, (struct sockaddr*)(&sa), &slen);
+            if(r<0) {
+                if(errno!=EAGAIN) { 
+                    fprintf(stderr,"recvfrom error: %d,%s\n",errno,strerror(errno));
+                    break;
+                }
+            } else {
+                fprintf(stderr,"received %d byte dgram\n",r);
+            }
         }
     }
     return 0;

@@ -56,22 +56,26 @@ public:
         return 1;
     }
     void broadcastAddresses(int fd, int room_id) {
-        const int bufsz=1+4+sizeof(struct sockaddr_in)*MEMBER_MAX; // cl_num(1byte) + room_id(4byte) + array of sockaddr_in
+        const int bufsz=4+4+4+sizeof(struct sockaddr_in)*MEMBER_MAX; // cl_num(1byte) + room_id(4byte) + array of sockaddr_in
         char buf[bufsz];
         memset(buf,0,bufsz);
-        buf[0]=cl_num;
-        set_u32(buf+1,room_id);
-        
+        set_u32(buf,0xffffffff);
+        set_u32(buf+4,room_id);
+        set_u32(buf+4+4,cl_num);
+
+        size_t ofs=4+4+4;
         for(int i=0;i<cl_num;i++){
-            memcpy(buf+1+4+i*sizeof(struct sockaddr_in), &clsa[i], sizeof(struct sockaddr_in));
+            set_u32(buf+ofs,clsa[i].sin_addr.s_addr);
+            ofs+=4;
+            set_u16(buf+ofs,clsa[i].sin_port);
+            ofs+=2;
         }
-        int sendlen = 1+4+sizeof(struct sockaddr_in)*cl_num;        
-        dumpbin(buf,sendlen);
+        dumpbin(buf,ofs);
         for(int i=0;i<cl_num;i++) {
             printf("broadcastAddresses: Sending addrs to %s:%d\n",
                    inet_ntoa(clsa[i].sin_addr), ntohs(clsa[i].sin_port));
             socklen_t slen = sizeof(struct sockaddr_in);
-            int r=sendto(fd, buf,sendlen, 0, (struct sockaddr*)(&clsa[i]), slen);
+            int r=sendto(fd, buf,ofs, 0, (struct sockaddr*)(&clsa[i]), slen);
             assert(r>=0);
             
         }
