@@ -271,8 +271,12 @@ int main(int argc, char* argv[]) {
     }
 
     fprintf(stderr,"stun finished! detecting NAT type:%d\n", ctx->detectNATType());
+    if(ctx->detectNATType()!=NAT_TYPE_IP_PORT_STATIC) {
+        fprintf(stderr, "Incompatible NAT type. IP address or port number is dynamic\n");
+        return 1;
+    }
     
-    fprintf(stderr,"starting hole punch\n==========================\n");
+    fprintf(stderr,"starting signaling\n==========================\n");
 
     /////
     
@@ -339,12 +343,21 @@ int main(int argc, char* argv[]) {
             }
         }
         if(g_targets_used == (room_member_num-1) ) {
-            fprintf(stderr, "### Room member targets OK!\n");
+            fprintf(stderr, "### Room member target number OK : %d\n", g_targets_used);
             break;
         }
     }
+
+    int nat_ok_count=0;
+    for(int i=0;i<g_targets_used;i++) {
+        if(g_targets[i].detectNATType()==NAT_TYPE_IP_PORT_STATIC)nat_ok_count++;
+    }
+    if(nat_ok_count<room_member_num-1) {
+        fprintf(stderr, "Need %d target(s), but only %d are in NAT type2..\n", room_member_num-1, nat_ok_count);
+        return 1;
+    }
     
-    fprintf(stderr, "### now we have all members set up! start ping test\n");
+    fprintf(stderr, "### now we have all members (%d) set up! start ping test\n", g_targets_used );
     while(1) {
         usleep(10*1000);
         double nt=now();
