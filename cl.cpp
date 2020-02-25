@@ -373,9 +373,32 @@ int main(int argc, char* argv[]) {
                         inet_ntoa(g_targets[i].sendersa.sin_addr), ntohs(g_targets[i].sendersa.sin_port),
                         inet_ntoa(g_targets[i].stun0sa.sin_addr), ntohs(g_targets[i].stun0sa.sin_port),
                         inet_ntoa(g_targets[i].stun1sa.sin_addr), ntohs(g_targets[i].stun1sa.sin_port) );
+                char buf[4] = {'h','o','g','e'};
+                struct sockaddr_in destsa;
+                destsa.sin_addr.s_addr = g_targets[i].stun0sa.sin_addr.s_addr;
+                destsa.sin_port = g_targets[i].stun0sa.sin_port;
+                
+                int r=sendto(ctx->fd,buf,4,0,(struct sockaddr*)&destsa,sizeof(destsa));
+                fprintf(stderr,"sendto result:%d to:%s:%d\n",r,inet_ntoa(destsa.sin_addr),ntohs(destsa.sin_port));
 
             }
         }
+        struct sockaddr_in sa;
+        socklen_t slen=sizeof(sa);
+        char buf[10];
+        int r=recvfrom(ctx->fd, buf, sizeof(buf), 0, (struct sockaddr*)(&sa), &slen);
+        if(r<=0) {
+            if(errno!=EAGAIN) { 
+                fprintf(stderr,"recvfrom error: %d,%s\n",errno,strerror(errno));
+                break;
+            } else {
+                fprintf(stderr,".")    ;
+            }
+        } else {
+            fprintf(stderr,"recvfrom ret:%d addr:%s:%d\n", r, inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
+        }
+        
+        
     }
 
     return 0;
