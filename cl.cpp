@@ -203,6 +203,9 @@ public:
             return NAT_TYPE_IP_PORT_DYNAMIC;
         }
     }
+    void clean() {
+        close(fd);
+    }
 };
 
 
@@ -253,6 +256,12 @@ void countEcho(struct sockaddr_in *sendersa) {
             g_targets[i].echo_cnt++;
         }
     }
+}
+bool echoTestDone() {
+    for(int i=0;i<g_targets_used;i++) {
+        if(g_targets[i].echo_cnt<10) return false;
+    }
+    return true;
 }
 /////////////
 
@@ -414,9 +423,12 @@ int main(int argc, char* argv[]) {
             }
         }
         
-        
+        if(echoTestDone()) {
+            fprintf(stderr,"echo test done!\n");
+            break;
+        }
     }
-
+    ctx->clean();
     return 0;
 }
 
