@@ -246,6 +246,14 @@ int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa
     return r;
     
 }
+void countEcho(struct sockaddr_in *sendersa) {
+    for(int i=0;i<g_targets_used;i++) {
+        if(g_targets[i].addrset.stun0sa.sin_addr.s_addr == sendersa->sin_addr.s_addr &&
+           g_targets[i].addrset.stun0sa.sin_port == sendersa->sin_port) {
+            g_targets[i].echo_cnt++;
+        }
+    }
+}
 /////////////
 
 int main(int argc, char* argv[]) {
@@ -401,7 +409,7 @@ int main(int argc, char* argv[]) {
             }
         } else {
             if(buf[0]=='h'&&buf[1]=='o'&&buf[2]=='g'&&buf[3]=='e') {
-                
+                countEcho(&sa);
                 fprintf(stderr,"recvfrom ret:%d addr:%s:%d\n", r, inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
             }
         }
