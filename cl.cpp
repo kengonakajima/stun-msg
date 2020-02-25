@@ -297,16 +297,19 @@ int main(int argc, char* argv[]) {
                 }
             } else {
                 fprintf(stderr,"received %d byte dgram\n",r);
-                if(r<12) {
+                if(r<18) {
                     fprintf(stderr,"dgram too short\n");
                     continue;
                 }
                 uint32_t magic=get_u32(buf);
                 int32_t room_id=get_u32(buf+4);
-                int32_t cl_num=get_u32(buf+4+4);
-                fprintf(stderr, "room_id:%d cl_num:%d\n",room_id,cl_num);
-                if(r>=12+(cl_num*6)) {
-                    size_t ofs=4+4+4;
+                struct sockaddr_in sendersa;
+                sendersa.sin_addr.s_addr=get_u32(buf+4+4);
+                sendersa.sin_port=get_u16(buf+4+4+4);
+                int32_t cl_num=get_u32(buf+4+4+4+2);
+                fprintf(stderr, "room_id:%d cl_num:%d sender:%s:%d\n",room_id,cl_num, inet_ntoa(sendersa.sin_addr),ntohs(sendersa.sin_port));
+                if(r>=18+(cl_num*6)) {
+                    size_t ofs=4+4+4+2+4;
                     for(int i=0;i<cl_num;i++) {
                         struct sockaddr_in sa;
                         sa.sin_addr.s_addr=get_u32(buf+ofs);

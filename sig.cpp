@@ -61,10 +61,10 @@ public:
         memset(buf,0,bufsz);
         set_u32(buf,0xffffffff);
         set_u32(buf+4,room_id);
-        set_u32(buf+4+4,cl_num);
-        set_u32(buf+4+4+4,sendersa->sin_addr.s_addr);
-        set_u16(buf+4+4+4+4,sendersa->sin_port); // nwbo
-        size_t ofs=4+4+4+4+2;
+        set_u32(buf+4+4,sendersa->sin_addr.s_addr);
+        set_u16(buf+4+4+4,sendersa->sin_port); // nwbo
+        set_u32(buf+4+4+4+2,cl_num);
+        size_t ofs=4+4+4+4+2+4;
         for(int i=0;i<cl_num;i++){
             set_u32(buf+ofs,clsa[i].sin_addr.s_addr);
             ofs+=4;
@@ -155,6 +155,7 @@ int main(int argc, char **argv) {
             }
             room->broadcastAddresses(s,room_id,&remotesa);
         }
+        usleep(10*1000);
     }
     close(s);
     return 0;
