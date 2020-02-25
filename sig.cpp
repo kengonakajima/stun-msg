@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
                     inet_ntoa(addrset.stun1sa.sin_addr), ntohs(addrset.stun1sa.sin_port) );
 
             Room *room = findRoomById(room_id);
-            if(room) {
+            if(!room) {
                 room = createRoom(room_id,&addrset);
             }
             // 利用可能なアドレスは、 remotesa(sigに送ってきたアドレス), sa0(STUNのprimary), sa1(STUNのalter)
