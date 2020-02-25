@@ -39,7 +39,12 @@ int32_t set_socket_nonblock(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);                                                                         
     assert(flags >= 0);                                                                                        
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);                                                             
-}                                                                                                              
+}
+
+bool is_same_sa_in(struct sockaddr_in *a0, struct sockaddr_in *a1) {
+    fprintf(stderr,"is_same_sa_in: %s:%d <> %s:%d\n", inet_ntoa(a0->sin_addr),ntohs(a0->sin_port), inet_ntoa(a1->sin_addr), ntohs(a1->sin_port));
+    return (a0->sin_addr.s_addr == a1->sin_addr.s_addr && a0->sin_port == a1->sin_port );
+}
 
 ///////////
 
@@ -236,7 +241,7 @@ int send_update_to_sig(int fd, struct sockaddr_in *sigsa, struct sockaddr_in *sa
     set_u16(buf+4+4+4+2+4,sa1->sin_port);
 
     int r=sendto(fd,buf,bufsz,0,(struct sockaddr*)sigsa,sizeof(*sigsa));
-    fprintf(stderr,"sending sigsv(%s:%d) :%d\n",inet_ntoa(sigsa->sin_addr),sigsa->sin_port,r);
+    fprintf(stderr,"sending sigsv(%s:%d) :%d\n",inet_ntoa(sigsa->sin_addr),ntohs(sigsa->sin_port),r);
     return r;
     
 }
@@ -269,7 +274,7 @@ int main(int argc, char* argv[]) {
     int room_id=123;
     struct sockaddr_in sigsa;
     int r=inet_aton(argv[1],&sigsa.sin_addr);
-    sigsa.sin_port=ntohs(9999);
+    sigsa.sin_port=htons(9999);
     assert(r==1);
     while(1) {
         usleep(10*1000);
@@ -292,6 +297,29 @@ int main(int argc, char* argv[]) {
                 }
             } else {
                 fprintf(stderr,"received %d byte dgram\n",r);
+                if(r<12) {
+                    fprintf(stderr,"dgram too short\n");
+                    continue;
+                }
+                uint32_t magic=get_u32(buf);
+                int32_t room_id=get_u32(buf+4);
+                int32_t cl_num=get_u32(buf+4+4);
+                fprintf(stderr, "room_id:%d cl_num:%d\n",room_id,cl_num);
+                if(r>=12+(cl_num*6)) {
+                    size_t ofs=4+4+4;
+                    for(int i=0;i<cl_num;i++) {
+                        struct sockaddr_in sa;
+                        sa.sin_addr.s_addr=get_u32(buf+ofs);
+                        sa.sin_port=get_u16(buf+ofs+4);// receive nwbo
+                        ofs+=6;
+                        fprintf(stderr, "target addr: %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
+                        if( is_same_sa_in(&sa,&ctx->mapped_first_sa)) {
+                            fprintf(stderr, "skipping local addr\n");
+                        } else {
+                            fprintf(stderr, "found target addr\n");
+                        }
+                    }
+                }
             }
         }
     }

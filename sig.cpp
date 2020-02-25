@@ -55,19 +55,20 @@ public:
         fprintf(stderr, "ensureClientAddr: added %s:%d in room %d\n", inet_ntoa(a->sin_addr), ntohs(a->sin_port),id);
         return 1;
     }
-    void broadcastAddresses(int fd, int room_id) {
-        const int bufsz=4+4+4+sizeof(struct sockaddr_in)*MEMBER_MAX; // cl_num(1byte) + room_id(4byte) + array of sockaddr_in
+    void broadcastAddresses(int fd, int room_id, struct sockaddr_in *sendersa) {
+        const int bufsz=4+4+4+(4+2)+sizeof(struct sockaddr_in)*MEMBER_MAX; // cl_num(1byte) + room_id(4byte) + array of sockaddr_in
         char buf[bufsz];
         memset(buf,0,bufsz);
         set_u32(buf,0xffffffff);
         set_u32(buf+4,room_id);
         set_u32(buf+4+4,cl_num);
-
-        size_t ofs=4+4+4;
+        set_u32(buf+4+4+4,sendersa->sin_addr.s_addr);
+        set_u16(buf+4+4+4+4,sendersa->sin_port); // nwbo
+        size_t ofs=4+4+4+4+2;
         for(int i=0;i<cl_num;i++){
             set_u32(buf+ofs,clsa[i].sin_addr.s_addr);
             ofs+=4;
-            set_u16(buf+ofs,clsa[i].sin_port);
+            set_u16(buf+ofs,clsa[i].sin_port); // nwbo
             ofs+=2;
         }
         dumpbin(buf,ofs);
@@ -152,7 +153,7 @@ int main(int argc, char **argv) {
             } else {
                 room = createRoom(room_id,&remotesa);
             }
-            room->broadcastAddresses(s,room_id);
+            room->broadcastAddresses(s,room_id,&remotesa);
         }
     }
     close(s);
